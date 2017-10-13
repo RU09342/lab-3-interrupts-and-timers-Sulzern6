@@ -1,12 +1,63 @@
+# Nathan Sulzer
+# Embedded Systems
+# Lab 3
 # Button Based Delay
-Now that you have begun to familiarize yourself with the TIMER modules, why don't we make an interesting change to our code from the last lab.
+The purpose of this task is to create a code that will take in a button press and output the timee length of that button press as the new LED blinking delay.  
+# Example Code
+This code functions by blinking an LED at a 10 hz delay using a timer. When a button on the microprocessor is pressed  the timer resets to determine the length of time that a button is held for and then uses that length to for the new delay on which the LED will blink.  
+```c
+include <msp430g2553.h>
 
-## Task
-Setup your microcontroller to initially blink and LED at a rate of 10Hz upon restarting or powering up. Then utilizing one of the buttons on board, a user should be able to set the delay or blinking rate of the LED by holding down a button. The duration in which the button is depressed should then become the new rate at which the LED blinks. As previously stated, you most likely will want to take advantage of the fact that TIMER modules exist and see if you can let them do a bulk of the work for you.
+#define LED1    BIT0    // Defines LED at P1.0
+#define LED2    BIT6    // Defines LED at P1.6
+#define BUTTON  BIT3    // Defines BUTTON at P1.3
+/**
+ * Nathan Sulzer
+ * Into to Embedded Systems
+ * main.c
+ */
+int main(void)
+{
+    WDTCTL = WDTPW | WDTHOLD;       // stop watchdog timer
+    P1SEL = 0x00;                   //sets P1 to GPIO
+    P1SEL2 = 0x00;
+    P1DIR = LED1;                   //sets LED at P1.0 to output
+    P1REN = BUTTON;                 //Resistor enabled for button P1.3
+    P1OUT = BUTTON;                 //Sets resistor to pull up for button P1.3 when not pressed
+    P1IE |= BUTTON;                 //interrupt enable for button P1.3
+    P1IES |= BUTTON;                //sets interrupt for Low/high transition
+    P1IFG &= ~BUTTON;               //Clears interrupt flag register
 
-### Extra Work
-## Reset Button
-What is a piece of electronics without a reset button? Instead of relying on resetting your processor using the built in reset circuitry, why not instead use another button to reset the rate back to 10Hz.
+    __bis_SR_register(GIE);         //General interrupt enable
 
-## Button Based Hertz
-Most likely using two buttons, what if instead of making a delay loop based on the time, the user could instead enter a mode where the number of times they pressed the button would become the number in Hz of the blinking rate? How do you think you would implement that with just one button?
+    TA0CCTL0 = CCIE;                // Enables Capture/compare register for interrupt of timer A0
+    TA0CCR0 = 6000;                 // register that timer will compare itself too
+    TA0CTL = TASSEL_1 + MC_1 + TACLR;           // ACLK, continous mode, clear TAR
+
+
+}
+
+#pragma vector=PORT1_VECTOR
+__interrupt void Port_1(void)
+{
+    if(!(P1IN & BUTTON))                 // Check for button Press
+    {
+    P1IES &= ~BUTTON;                   //sets interrupt to low/high transition
+    TA0CTL = TASSEL_1 + MC_2 + TACLR;   // ACLK, up mode, clear TAR
+    P1IFG = 0x0000;                     //clear interrupt flag
+    }
+    else
+    {
+    P1IES |= BUTTON;                    //sets interrupt to trigger on falling edge (button press)
+    TA0CCR0 = TA0R;                     //Sets the timer for the button press to CCR0
+    TA0CTL = TASSEL_1 + MC_1 + TACLR;   // ACLK, up mode, clear TAR
+    P1IFG &= ~BUTTON;                   //clears interrupt flag
+    }
+}
+
+#pragma vector=TIMER0_A0_VECTOR
+__interrupt void TIMER0_A0_ISR(void)
+{
+            P1OUT ^= LED1;              //Toggle LED
+}
+```
